@@ -11,20 +11,20 @@
 
 ##Switches
 ##IO_L19N_T3_VREF_35
-set_property PACKAGE_PIN G15 [get_ports {sw[0]}]
-set_property IOSTANDARD LVCMOS33 [get_ports {sw[0]}]
+#set_property PACKAGE_PIN G15 [get_ports {sw[0]}]
+#set_property IOSTANDARD LVCMOS33 [get_ports {sw[0]}]
 
 ##IO_L24P_T3_34
-set_property PACKAGE_PIN P15 [get_ports {sw[1]}]
-set_property IOSTANDARD LVCMOS33 [get_ports {sw[1]}]
+#set_property PACKAGE_PIN P15 [get_ports {sw[1]}]
+#set_property IOSTANDARD LVCMOS33 [get_ports {sw[1]}]
 
 ##IO_L4N_T0_34
-set_property PACKAGE_PIN W13 [get_ports {sw[2]}]
-set_property IOSTANDARD LVCMOS33 [get_ports {sw[2]}]
+#set_property PACKAGE_PIN W13 [get_ports {sw[2]}]
+#set_property IOSTANDARD LVCMOS33 [get_ports {sw[2]}]
 
 ##IO_L9P_T1_DQS_34
-set_property PACKAGE_PIN T16 [get_ports {sw[3]}]
-set_property IOSTANDARD LVCMOS33 [get_ports {sw[3]}]
+#set_property PACKAGE_PIN T16 [get_ports {sw[3]}]
+#set_property IOSTANDARD LVCMOS33 [get_ports {sw[3]}]
 
 ##Buttons
 ##IO_L20N_T3_34
@@ -95,14 +95,14 @@ set_property IOSTANDARD LVCMOS33 [get_ports btn]
 ##IO_L13P_T2_MRCC_34
 #set_property PACKAGE_PIN N18 [get_ports ac_scl]
 #set_property IOSTANDARD LVCMOS33 [get_ports ac_scl]
-set_property PACKAGE_PIN N18 [get_ports IIC_0_scl_io]
-set_property IOSTANDARD LVCMOS33 [get_ports IIC_0_scl_io]
+#set_property PACKAGE_PIN N18 [get_ports IIC_0_scl_io]
+#set_property IOSTANDARD LVCMOS33 [get_ports IIC_0_scl_io]
 
 ##IO_L23P_T3_34
 #set_property PACKAGE_PIN N17 [get_ports ac_sda]
 #set_property IOSTANDARD LVCMOS33 [get_ports ac_sda]
-set_property PACKAGE_PIN N17 [get_ports IIC_0_sda_io]
-set_property IOSTANDARD LVCMOS33 [get_ports IIC_0_sda_io]
+#set_property PACKAGE_PIN N17 [get_ports IIC_0_sda_io]
+#set_property IOSTANDARD LVCMOS33 [get_ports IIC_0_sda_io]
 
 ##Additional Ethernet signals
 ##IO_L6P_T0_35
