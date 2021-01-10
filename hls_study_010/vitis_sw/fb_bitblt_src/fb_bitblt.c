@@ -10,7 +10,7 @@
 #include "xparameters.h"
 #include "xaxivdma.h"
 #include "xil_cache.h"
-#include "xdrawline.h"
+#include "xbitblt.h"
 /*
  * Device related constants. These need to defined as per the HW system.
  */
@@ -53,22 +53,27 @@
 /*
  * Device instance definitions
  */
+/* DMA channel setup
+ */
 XAxiVdma AxiVdma;
+static XAxiVdma_DmaSetup ReadCfg;
+
 /* Data address
  *
  * Read and write sub-frame use the same settings
  */
 static u32 ReadFrameAddr;
 static u32 WriteFrameAddr;
+static u32 ResourceAddr;
 
 static u32 BlockStartOffset;
 static u32 BlockHoriz;
 static u32 BlockVert;
 
-XDrawline InstanceXDrawline;
-/* DMA channel setup
+/*
+ * Accelerator setup
  */
-static XAxiVdma_DmaSetup ReadCfg;
+XBitblt InstanceXBitBlt;
 
 /******************* Function Prototypes ************************************/
 
@@ -97,48 +102,52 @@ static int StopTransfer(XAxiVdma *InstancePtr);
 -- 0x04 : Global Interrupt Enable Register
 -- 0x08 : IP Interrupt Enable Register (Read/Write)
 -- 0x0c : IP Interrupt Status Register (Read/TOW)
--- 0x10 : Data signal of fb
---        bit 31~0 - fb[31:0] (Read/Write)
--- 0x18 : Data signal of col
---        bit 31~0 - col[31:0] (Read/Write)
+-- 0x10 : Data signal of src_fb
+--        bit 31~0 - src_fb[31:0] (Read/Write)
 -- 0x20 : Data signal of x1
 --        bit 15~0 - x1[15:0] (Read/Write)
 -- 0x28 : Data signal of y1
 --        bit 15~0 - y1[15:0] (Read/Write)
+-- 0x20 : Data signal of dx
+--        bit 15~0 - dx[15:0] (Read/Write)
+-- 0x28 : Data signal of dy
+--        bit 15~0 - dy[15:0] (Read/Write)
+-- 0x10 : Data signal of dst_fb
+--        bit 31~0 - dst_fb[31:0] (Read/Write)
 -- 0x30 : Data signal of x2
 --        bit 15~0 - x2[15:0] (Read/Write)
 -- 0x38 : Data signal of y2
 --        bit 15~0 - y2[15:0] (Read/Write)
 */
 
-extern XDrawline_Config* XDrawline_LookupConfig(u16 DeviceId);
-extern void XDrawline_Start(XDrawline *InstancePtr);
-extern void XDrawline_Stop(XDrawline *InstancePtr);
-extern u32 XDrawline_IsIdle(XDrawline *InstancePtr);
-extern u32 XDrawline_IsReady(XDrawline *InstancePtr);
-extern void XDrawline_Set_fb(XDrawline *InstancePtr, u32 Data);
-extern void XDrawline_Set_x1(XDrawline *InstancePtr, u32 Data);
-extern void XDrawline_Set_y1(XDrawline *InstancePtr, u32 Data);
-extern void XDrawline_Set_x2(XDrawline *InstancePtr, u32 Data);
-extern void XDrawline_Set_y2(XDrawline *InstancePtr, u32 Data);
-extern void XDrawline_Set_col(XDrawline *InstancePtr, u32 Data);
+extern XBitblt_Config* XBitblt_LookupConfig(u16 DeviceId);
+extern void XBitblt_Start(XBitblt *InstancePtr);
+extern void XBitblt_Stop(XBitblt *InstancePtr);
+extern u32 XBitblt_IsIdle(XBitblt *InstancePtr);
+extern u32 XBitblt_IsReady(XBitblt *InstancePtr);
+extern void XBitblt_Set_fb(XBitblt *InstancePtr, u32 Data);
+extern void XBitblt_Set_x1(XBitblt *InstancePtr, u32 Data);
+extern void XBitblt_Set_y1(XBitblt *InstancePtr, u32 Data);
+extern void XBitblt_Set_x2(XBitblt *InstancePtr, u32 Data);
+extern void XBitblt_Set_y2(XBitblt *InstancePtr, u32 Data);
+extern void XBitblt_Set_col(XBitblt *InstancePtr, u32 Data);
 
-XDrawline_Config XDrawline_ConfigTable[XPAR_XDRAWLINE_NUM_INSTANCES] =
+XBitblt_Config XBitblt_ConfigTable[XPAR_XBITBLT_NUM_INSTANCES] =
 {
 	{
-		XPAR_XDRAWLINE_0_DEVICE_ID,
-		XPAR_XDRAWLINE_0_S_AXI_CONTROL_BASEADDR
+		XPAR_XBITBLT_0_DEVICE_ID,
+		XPAR_XBITBLT_0_S_AXI_CONTROL_BASEADDR
 	}
 };
 
-XDrawline_Config *XDrawline_LookupConfig(u16 DeviceId) {
-	XDrawline_Config *ConfigPtr = NULL;
+XBitblt_Config *XBitblt_LookupConfig(u16 DeviceId) {
+	XBitblt_Config *ConfigPtr = NULL;
 
 	int Index;
 
-	for (Index = 0; Index < XPAR_XDRAWLINE_NUM_INSTANCES; Index++) {
-		if (XDrawline_ConfigTable[Index].DeviceId == DeviceId) {
-			ConfigPtr = &XDrawline_ConfigTable[Index];
+	for (Index = 0; Index < XPAR_XBITBLT_NUM_INSTANCES; Index++) {
+		if (XBitblt_ConfigTable[Index].DeviceId == DeviceId) {
+			ConfigPtr = &XBitblt_ConfigTable[Index];
 			break;
 		}
 	}
@@ -146,7 +155,7 @@ XDrawline_Config *XDrawline_LookupConfig(u16 DeviceId) {
 	return ConfigPtr;
 }
 
-int XDrawline_CfgInitialize(XDrawline *InstancePtr, XDrawline_Config *ConfigPtr) {
+int XBitblt_CfgInitialize(XBitblt *InstancePtr, XBitblt_Config *ConfigPtr) {
     Xil_AssertNonvoid(InstancePtr != NULL);
     Xil_AssertNonvoid(ConfigPtr != NULL);
 
@@ -156,131 +165,149 @@ int XDrawline_CfgInitialize(XDrawline *InstancePtr, XDrawline_Config *ConfigPtr)
     return XST_SUCCESS;
 }
 
-int XDrawline_Initialize(XDrawline *InstancePtr, u16 DeviceId) {
-	XDrawline_Config *ConfigPtr;
+int XBitblt_Initialize(XBitblt *InstancePtr, u16 DeviceId) {
+	XBitblt_Config *ConfigPtr;
 
 	Xil_AssertNonvoid(InstancePtr != NULL);
 
-	ConfigPtr = XDrawline_LookupConfig(DeviceId);
+	ConfigPtr = XBitblt_LookupConfig(DeviceId);
 	if (ConfigPtr == NULL) {
 		InstancePtr->IsReady = 0;
 		return (XST_DEVICE_NOT_FOUND);
 	}
 
-	return XDrawline_CfgInitialize(InstancePtr, ConfigPtr);
+	return XBitblt_CfgInitialize(InstancePtr, ConfigPtr);
 }
 
-void XDrawline_Start(XDrawline *InstancePtr) {
+void XBitblt_Start(XBitblt *InstancePtr) {
     u32 Data;
 
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    Data = XDrawline_ReadReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL) & 0x80;
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL, Data | 0x01);
+    Data = XBitblt_ReadReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL) & 0x80;
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL, Data | 0x01);
 }
 
-void XDrawline_Stop(XDrawline *InstancePtr) {
+void XBitblt_Stop(XBitblt *InstancePtr) {
     u32 Data;
 
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    Data = XDrawline_ReadReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL) & 0x80;
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL, Data);
+    Data = XBitblt_ReadReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL) & 0x80;
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL, Data);
 }
 
-u32 XDrawline_IsDone(XDrawline *InstancePtr) {
+u32 XBitblt_IsDone(XBitblt *InstancePtr) {
     u32 Data;
 
     Xil_AssertNonvoid(InstancePtr != NULL);
     Xil_AssertNonvoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    Data = XDrawline_ReadReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL);
+    Data = XBitblt_ReadReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL);
     return (Data >> 1) & 0x1;
 }
 
-u32 XDrawline_IsIdle(XDrawline *InstancePtr) {
+u32 XBitblt_IsIdle(XBitblt *InstancePtr) {
     u32 Data;
 
     Xil_AssertNonvoid(InstancePtr != NULL);
     Xil_AssertNonvoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    Data = XDrawline_ReadReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL);
+    Data = XBitblt_ReadReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL);
     return (Data >> 2) & 0x1;
 }
 
-u32 XDrawline_IsReady(XDrawline *InstancePtr) {
+u32 XBitblt_IsReady(XBitblt *InstancePtr) {
     u32 Data;
 
     Xil_AssertNonvoid(InstancePtr != NULL);
     Xil_AssertNonvoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    Data = XDrawline_ReadReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_AP_CTRL);
+    Data = XBitblt_ReadReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_AP_CTRL);
     // check ap_start to see if the pcore is ready for next input
     return !(Data & 0x1);
 }
 
-void XDrawline_Set_fb(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_src_fb(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_FB_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_SRC_FB_DATA, Data);
 }
 
-void XDrawline_Set_x1(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_x1(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_X1_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_X1_DATA, Data);
 }
 
-void XDrawline_Set_y1(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_y1(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_Y1_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_Y1_DATA, Data);
 }
 
-void XDrawline_Set_x2(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_dx(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_X2_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_DX_DATA, Data);
 }
 
-void XDrawline_Set_y2(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_dy(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_Y2_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_DY_DATA, Data);
 }
 
-void XDrawline_Set_col(XDrawline *InstancePtr, u32 Data) {
+void XBitblt_Set_dst_fb(XBitblt *InstancePtr, u32 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
 
-    XDrawline_WriteReg(InstancePtr->Control_BaseAddress, XDRAWLINE_CONTROL_ADDR_COL_DATA, Data);
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_DST_FB_DATA, Data);
 }
 
-static void HwIpDrawLine(u32 fb, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint32_t col)
+void XBitblt_Set_x2(XBitblt *InstancePtr, u32 Data) {
+    Xil_AssertVoid(InstancePtr != NULL);
+    Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
+
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_X2_DATA, Data);
+}
+
+void XBitblt_Set_y2(XBitblt *InstancePtr, u32 Data) {
+    Xil_AssertVoid(InstancePtr != NULL);
+    Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
+
+    XBitblt_WriteReg(InstancePtr->Control_BaseAddress, XBITBLT_CONTROL_ADDR_Y2_DATA, Data);
+}
+
+static void HwIpBitBlt(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint16_t dy, u32 dst_fb, uint16_t x2, uint16_t y2)
 {
-	XDrawline_Set_fb(&InstanceXDrawline, fb);
     // Invoke XTop accelerator
-	XDrawline_Set_col(&InstanceXDrawline, col); // col
-	XDrawline_Set_x1(&InstanceXDrawline, x1); // x1
-	XDrawline_Set_y1(&InstanceXDrawline, y1); // y1
-	XDrawline_Set_x2(&InstanceXDrawline, x2); // x2
-	XDrawline_Set_y2(&InstanceXDrawline, y2); // y2
+	// set source information
+	XBitblt_Set_src_fb(&InstanceXBitBlt, src_fb);
+	XBitblt_Set_x1(&InstanceXBitBlt, x1); // x1
+	XBitblt_Set_y1(&InstanceXBitBlt, y1); // y1
+	XBitblt_Set_dx(&InstanceXBitBlt, dx); // dx
+	XBitblt_Set_dy(&InstanceXBitBlt, dy); // dy
+	// set destination information
+	XBitblt_Set_dst_fb(&InstanceXBitBlt, dst_fb);
+	XBitblt_Set_x2(&InstanceXBitBlt, x2); // x2
+	XBitblt_Set_y2(&InstanceXBitBlt, y2); // y2
 
 //    xil_printf("Wait for Idle signal...");
-    while (!XDrawline_IsIdle(&InstanceXDrawline));
+    while (!XBitblt_IsIdle(&InstanceXBitBlt));
 //    xil_printf("Done.\r\n\r\n");
 //    xil_printf("Send start XTop IP signal\r\n");
-    XDrawline_Start(&InstanceXDrawline);
+    XBitblt_Start(&InstanceXBitBlt);
 //    xil_printf("Wait for Ready signal...");
-    while (!XDrawline_IsReady(&InstanceXDrawline));
-    XDrawline_Stop(&InstanceXDrawline);
+    while (!XBitblt_IsReady(&InstanceXBitBlt));
+    XBitblt_Stop(&InstanceXBitBlt);
 //    xil_printf("Done.\r\n\r\n");
 }
 
@@ -291,13 +318,14 @@ int main()
 	XAxiVdma_Config *Config;
 	XAxiVdma_FrameCounter FrameCfg;
 	int Status;
-	u32 x1, y1, x2, y2, col;
+	u32 x1, y1, col;
 
 	ReadFrameAddr = READ_ADDRESS_BASE;
 	WriteFrameAddr = WRITE_ADDRESS_BASE;
 	BlockStartOffset = SUBFRAME_START_OFFSET;
 	BlockHoriz = SUBFRAME_HORIZONTAL_SIZE;
 	BlockVert = SUBFRAME_VERTICAL_SIZE;
+	ResourceAddr = WriteFrameAddr + size;
 
 	xil_printf("\r\n--- Entering main() --- \r\n");
 
@@ -375,7 +403,7 @@ int main()
     print("Hello World\n\r");
 
     xil_printf("Initialize XTop driver\r\n");
-    XDrawline_Initialize(&InstanceXDrawline, XPAR_XDRAWLINE_0_DEVICE_ID);
+    XBitblt_Initialize(&InstanceXBitBlt, XPAR_XBITBLT_0_DEVICE_ID);
 
     // Clear frame buffer
     xil_printf("Clear frame buffer\r\n");
@@ -383,20 +411,21 @@ int main()
     {
     	for (j = 0; j < 800; j++)
 		{
-			FB(WriteFrameAddr, (i*800+j)) = 1;
+    		col = (i / 16) << 2 | (j / 16);
+			FB(ResourceAddr, (i*800+j)) = RGB1(col >> 2, col >> 1, col);
 		}
     }
-    Xil_DCacheFlushRange(WriteFrameAddr, size);
+    Xil_DCacheFlushRange(ResourceAddr, size);
 
-    // Invoke XTop accelerator
-    HwIpDrawLine(WriteFrameAddr, 80, 80, 719, 399, RGB8(255, 255, 255));
-    // Invoke XTop accelerator
-    HwIpDrawLine(WriteFrameAddr,  83,  83, 716, 396, RGB8(0, 64, 255));
-    // Invoke XTop accelerator
-    HwIpDrawLine(WriteFrameAddr,  80, 240, 719, 241, RGB8(255, 255, 255));
-    // Invoke XTop accelerator
-    HwIpDrawLine(WriteFrameAddr, 480, 240, 481, 399, RGB8(255, 255, 255));
-
+	for (i = 0; i < 30; i++)
+	{
+		y1 = i << 4;
+		for (j = 0; j < 50; j++)
+		{
+			x1 = j << 4;
+			HwIpBitBlt(ResourceAddr, x1, y1, 16, 16, WriteFrameAddr, x1, y1);
+		}
+	}
     // Invalidate frame buffer to reload updated data
     Xil_DCacheInvalidateRange(ReadFrameAddr, size);
 
@@ -405,22 +434,29 @@ int main()
     for (i = 0; i < 8; i++)
     {
     	xil_printf("\r\nfb(%03d): ", i);
-    	for (j = 0; j < 32; j++)
+    	for (j = 0; j < 16; j++)
 		{
     		xil_printf("%02x ", FB(ReadFrameAddr, ((i+76)*800+(j+76))) & 0xFF);
 		}
     }
 	xil_printf("\r\n");
 
-	xil_printf("RAND_MAX = 0x%0x\r\n", RAND_MAX);
-	for (i = 0; i < 1024; i++)
+	while ((1))
 	{
-		x1 = rand() % 800;
-		y1 = rand() % 480;
-		x2 = rand() % 800;
-		y2 = rand() % 480;
-		col = RGB1(rand() & 1, rand() & 1, rand() & 1);
-		HwIpDrawLine(WriteFrameAddr, x1, y1, x2, y2, col);
+		for (i = 0; i < 800 * 480; i++)
+			FB(ReadFrameAddr, i) = 0;
+	    Xil_DCacheFlushRange(ReadFrameAddr, size);
+		for (i = 0; i < 13000000; i++);
+		for (i = 0; i < 30; i++)
+		{
+			y1 = i << 4;
+			for (j = 0; j < 50; j++)
+			{
+				x1 = j << 4;
+				HwIpBitBlt(ResourceAddr, x1, y1, 16, 16, WriteFrameAddr, x1, y1);
+			}
+		}
+		for (i = 0; i < 65000000; i++);
 	}
 	xil_printf("--- Exiting main() --- \r\n");
 
