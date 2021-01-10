@@ -43,12 +43,10 @@ int main()
 
 	fp = fopen("sample.ppm", "wb");
 	// Write ppm header
-	fprintf(fp, "P6\n");
-	fprintf(fp, "%d %d\n", WIDTH, HEIGHT);
-	fprintf(fp, "255\n");
+	fprintf(fp, "P3 %d %d 255\n", WIDTH, HEIGHT);
 	// Write body
 	for (i = 0; i < FB_SIZE; i++) {
-		fprintf(fp, "%c%c%c",
+		fprintf(fp, "%d %d %d\n",
 				(frame_buffer[i] >> 16) & 0xff,
 				(frame_buffer[i] >>  8) & 0xff,
 				(frame_buffer[i] >>  0) & 0xff);
