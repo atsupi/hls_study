@@ -1,8 +1,10 @@
 /******************************************************
- *  Filename: fb_accel.c 
- *  Created on: 	2021/01/10
+ *    Filename:     fb_accel.c 
+ *     Purpose:     test app for graphics acceleration IP
+ *  Target Plf:     ZYBO 
+ *  Created on: 	2021/01/14
  *      Author: 	atsupi.com
- *     Version:		1.0
+ *     Version:		1.10
  ******************************************************/
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,9 +56,6 @@
 #define XGFXACCEL_MODE_FILLRECT		1
 #define XGFXACCEL_MODE_LINE			2
 #define XGFXACCEL_MODE_BITBLT		3
-
-// Workaround for fill rect IP. Need to add 1 pixel both for horizontal and vertical.
-#define WA_FOR_FILLRECT				1
 
 /*
  * Device instance definitions
@@ -343,8 +342,7 @@ static void HwIpGfxaccel(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint
 
 static void XGfxaccel_FillRect(u32 fb, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint32_t col)
 {
-	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2 + WA_FOR_FILLRECT, y2 + WA_FOR_FILLRECT, col, XGFXACCEL_MODE_FILLRECT);
-	// ToDo: remove WA_FOR_LINE when the bug of fill rect IP is fixed.
+	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2, y2, col, XGFXACCEL_MODE_FILLRECT);
 }
 
 static void XGfxaccel_DrawLine(u32 fb, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint32_t col)

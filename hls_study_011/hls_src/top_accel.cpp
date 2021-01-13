@@ -1,3 +1,12 @@
+/*
+ * Filename: top_accel.cpp
+ *  Purpose: Graphics acceleration algorithms running on Vitis HLS
+ *           (Fill rectangle / Draw line / Bit block transfer)
+ *      Ver: 1.10
+ *     Date: 2021/01/14
+ *   Author: atsupi.com
+ */
+
 #include "ap_int.h"
 
 #define WIDTH			800

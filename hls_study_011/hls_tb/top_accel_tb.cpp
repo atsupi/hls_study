@@ -1,3 +1,11 @@
+/*
+ * Filename: top_accel_tb.cpp
+ *  Purpose: test bench for grahpcs acceleration algorithm running on Vitis HLS
+ *      Ver: 1.10
+ *     Date: 2021/01/14
+ *   Author: atsupi.com
+ */
+
 #include "ap_int.h"
 
 #define WIDTH			800
