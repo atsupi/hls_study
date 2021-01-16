@@ -307,7 +307,7 @@ proc create_root_design { parentCell } {
    CONFIG.c_include_s2mm {0} \
    CONFIG.c_mm2s_genlock_mode {1} \
    CONFIG.c_mm2s_max_burst_length {64} \
-   CONFIG.c_num_fstores {1} \
+   CONFIG.c_num_fstores {3} \
    CONFIG.c_s2mm_genlock_mode {0} \
    CONFIG.c_use_mm2s_fsync {1} \
  ] $axi_vdma_0

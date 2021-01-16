@@ -1,8 +1,8 @@
 /*
  * Filename: top_accel_tb.cpp
- *  Purpose: test bench for grahpcs acceleration algorithm running on Vitis HLS
- *      Ver: 1.10
- *     Date: 2021/01/14
+ *  Purpose: test bench for graphics acceleration algorithm running on Vitis HLS
+ *      Ver: 1.20
+ *     Date: 2021/01/15
  *   Author: atsupi.com
  */
 
@@ -20,9 +20,14 @@
 #define MODE_LINE		2
 #define MODE_BITBLT		3
 
+#define BB_OP_NONE		0
+#define BB_OP_OR		1
+#define BB_OP_AND		2
+#define BB_OP_XOR		3
+
 #define RGB1(r, g, b)  (((((r) & 1) * 0x3ff << 20) | ((g) & 1) * 0x3ff << 10) | (((b) & 1) * 0x3ff))
 
-extern void GfxAccel(ap_uint<32> *src_fb, ap_uint<16> x1, ap_uint<16> y1, ap_uint<16> dx, ap_uint<16> dy, ap_uint<32> *dst_fb, ap_uint<16> x2, ap_uint<16> y2, ap_uint<32> col, ap_uint<8> mode);
+extern void GfxAccel(ap_uint<32> *src_fb, ap_uint<16> x1, ap_uint<16> y1, ap_uint<16> dx, ap_uint<16> dy, ap_uint<32> *dst_fb, ap_uint<16> x2, ap_uint<16> y2, ap_uint<32> col, ap_uint<8> mode, ap_uint<8> op);
 
 int main()
 {
@@ -47,7 +52,7 @@ int main()
 	/*
 	 * Fill rectangle
 	 */
-	GfxAccel(NULL, x1, y1, 0, 0, (ap_uint<32> *)dst_frame, x2, y2, col, MODE_FILLRECT);
+	GfxAccel(NULL, x1, y1, 0, 0, (ap_uint<32> *)dst_frame, x2, y2, col, MODE_FILLRECT, BB_OP_NONE);
 
 	// Verify frame buffer
 	for(i = 0; i < FB_SIZE; i++)
@@ -75,7 +80,7 @@ int main()
 		int y = cy + s * RADIUS;
 
 		printf("%02d: (%d,%d)-(%d,%d)\n", i, ox, oy, x, y);
-		GfxAccel(NULL, ox, oy, 0, 0, (ap_uint<32> *)dst_frame, x, y, 0xffffffff, MODE_LINE);
+		GfxAccel(NULL, ox, oy, 0, 0, (ap_uint<32> *)dst_frame, x, y, 0xffffffff, MODE_LINE, BB_OP_NONE);
 		ox = x;
 		oy = y;
 	}
@@ -107,7 +112,11 @@ int main()
 		ox = (i % (WIDTH >> 4)) << 4;
 		oy = (i / (WIDTH >> 4)) << 4;
 		fprintf(stdout, "%02d: (%d,%d)-(%d,%d)\n", i, ox, oy, dx, dy);
-		GfxAccel((ap_uint<32> *)src_frame, ox, oy, dx, dy, (ap_uint<32> *)dst_frame, ox, oy, 0, MODE_BITBLT);
+		GfxAccel((ap_uint<32> *)src_frame, ox, oy, dx, dy, (ap_uint<32> *)dst_frame, ox, oy,
+//				0, MODE_BITBLT, BB_OP_NONE);
+//				0, MODE_BITBLT, BB_OP_OR);
+//				0, MODE_BITBLT, BB_OP_AND);
+				0, MODE_BITBLT, BB_OP_XOR);
 	}
 
 	fp = fopen("sample_bitblt.ppm", "w");

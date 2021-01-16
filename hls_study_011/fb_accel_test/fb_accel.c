@@ -4,7 +4,7 @@
  *  Target Plf:     ZYBO 
  *  Created on: 	2021/01/14
  *      Author: 	atsupi.com
- *     Version:		1.10
+ *     Version:		1.20
  ******************************************************/
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +13,7 @@
 #include "xaxivdma.h"
 #include "xil_cache.h"
 #include "xgfxaccel.h"
+
 /*
  * Device related constants. These need to defined as per the HW system.
  */
@@ -40,8 +41,8 @@
  * We multiply 15 to the num stores is to increase the intervals between
  * interrupts. If you are using fsync, then it is not necessary.
  */
-#define NUMBER_OF_READ_FRAMES		1
-#define NUMBER_OF_WRITE_FRAMES		1
+#define NUMBER_OF_READ_FRAMES		3
+#define NUMBER_OF_WRITE_FRAMES		3
 #define DELAY_TIMER_COUNTER			10
 
 // Definition for Frame buffer and Color
@@ -57,6 +58,11 @@
 #define XGFXACCEL_MODE_LINE			2
 #define XGFXACCEL_MODE_BITBLT		3
 
+#define XGFXACCEL_BB_NONE			0
+#define XGFXACCEL_BB_OR				1
+#define XGFXACCEL_BB_AND			2
+#define XGFXACCEL_BB_XOR			3
+
 /*
  * Device instance definitions
  */
@@ -70,12 +76,15 @@ static XAxiVdma_DmaSetup ReadCfg;
  * Read and write sub-frame use the same settings
  */
 static u32 ReadFrameAddr;
-static u32 WriteFrameAddr;
+static u32 WriteFrameAddr[NUMBER_OF_WRITE_FRAMES];
 static u32 ResourceAddr;
 
 static u32 BlockStartOffset;
 static u32 BlockHoriz;
 static u32 BlockVert;
+
+static char fbActive;
+static char fbBackgd;
 
 /*
  * Accelerator instance
@@ -315,12 +324,20 @@ void XGfxaccel_Set_mode(XGfxaccel *InstancePtr, u32 Data) {
     XGfxaccel_WriteReg(InstancePtr->Control_BaseAddress, XGFXACCEL_CONTROL_ADDR_MODE_DATA, Data);
 }
 
-static void HwIpGfxaccel(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint16_t dy, u32 dst_fb, uint16_t x2, uint16_t y2, uint32_t col, uint8_t mode)
+void XGfxaccel_Set_op(XGfxaccel *InstancePtr, u32 Data) {
+    Xil_AssertVoid(InstancePtr != NULL);
+    Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
+
+    XGfxaccel_WriteReg(InstancePtr->Control_BaseAddress, XGFXACCEL_CONTROL_ADDR_OP_DATA, Data);
+}
+
+static void HwIpGfxaccel(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint16_t dy, u32 dst_fb, uint16_t x2, uint16_t y2, uint32_t col, uint8_t mode, uint8_t op)
 {
 	XGfxaccel_Set_src_fb(&InstanceXGfxaccel, src_fb);
 	XGfxaccel_Set_dst_fb(&InstanceXGfxaccel, dst_fb);
     // Invoke XTop accelerator
 	XGfxaccel_Set_mode(&InstanceXGfxaccel, mode); // mode
+	XGfxaccel_Set_op(&InstanceXGfxaccel, op); // op
 	XGfxaccel_Set_col(&InstanceXGfxaccel, col); // col
 	XGfxaccel_Set_x1(&InstanceXGfxaccel, x1); // x1
 	XGfxaccel_Set_y1(&InstanceXGfxaccel, y1); // y1
@@ -342,17 +359,17 @@ static void HwIpGfxaccel(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint
 
 static void XGfxaccel_FillRect(u32 fb, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint32_t col)
 {
-	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2, y2, col, XGFXACCEL_MODE_FILLRECT);
+	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2, y2, col, XGFXACCEL_MODE_FILLRECT, 0);
 }
 
 static void XGfxaccel_DrawLine(u32 fb, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint32_t col)
 {
-	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2, y2, col, XGFXACCEL_MODE_LINE);
+	HwIpGfxaccel(0, x1, y1, 0, 0, fb, x2, y2, col, XGFXACCEL_MODE_LINE, 0);
 }
 
-static void XGfxaccel_BitBlt(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint16_t dy, u32 dst_fb, uint16_t x2, uint16_t y2)
+static void XGfxaccel_BitBlt(u32 src_fb, uint16_t x1, uint16_t y1, uint16_t dx, uint16_t dy, u32 dst_fb, uint16_t x2, uint16_t y2, uint8_t op)
 {
-	HwIpGfxaccel(src_fb, x1, y1, dx, dy, dst_fb, x2, y2, 0, XGFXACCEL_MODE_BITBLT);
+	HwIpGfxaccel(src_fb, x1, y1, dx, dy, dst_fb, x2, y2, 0, XGFXACCEL_MODE_BITBLT, op);
 }
 
 typedef struct _pos {
@@ -392,11 +409,11 @@ void drawTrianglePolygons(void)
 	};
 
 	int i;
-	XGfxaccel_DrawLine(WriteFrameAddr, points[0].x, points[0].y, points[1].x, points[1].y, 0xffffffff);
+	XGfxaccel_DrawLine(WriteFrameAddr[0], points[0].x, points[0].y, points[1].x, points[1].y, 0xffffffff);
 	for (i = 0; i < 24; i++)
 	{
-		XGfxaccel_DrawLine(WriteFrameAddr, points[i+1].x, points[i+1].y, points[i+2].x, points[i+2].y, 0xffffffff);
-		XGfxaccel_DrawLine(WriteFrameAddr, points[i+2].x, points[i+2].y, points[i].x, points[i].y, 0x3ff00000);
+		XGfxaccel_DrawLine(WriteFrameAddr[0], points[i+1].x, points[i+1].y, points[i+2].x, points[i+2].y, 0xffffffff);
+		XGfxaccel_DrawLine(WriteFrameAddr[0], points[i+2].x, points[i+2].y, points[i].x, points[i].y, 0x3ff00000);
 	}
 }
 
@@ -417,17 +434,22 @@ static void SetupFrame(u32 baseAddr)
 int main()
 {
 	int i, j;
+	int x, y;
 	u32 size = FRAME_HORIZONTAL_LEN * FRAME_VERTICAL_LEN;
 	XAxiVdma_Config *Config;
 	XAxiVdma_FrameCounter FrameCfg;
 	int Status;
 
 	ReadFrameAddr = READ_ADDRESS_BASE;
-	WriteFrameAddr = WRITE_ADDRESS_BASE;
+	WriteFrameAddr[0] = WRITE_ADDRESS_BASE;
+	WriteFrameAddr[1] = WRITE_ADDRESS_BASE + size;
 	BlockStartOffset = SUBFRAME_START_OFFSET;
 	BlockHoriz = SUBFRAME_HORIZONTAL_SIZE;
 	BlockVert = SUBFRAME_VERTICAL_SIZE;
-	ResourceAddr = READ_ADDRESS_BASE + size;
+	ResourceAddr = WriteFrameAddr[1] + size;
+
+	fbActive = 0;
+	fbBackgd = 1;
 
 	xil_printf("\r\n--- Entering main() --- \r\n");
 
@@ -451,6 +473,8 @@ int main()
 
 		return XST_FAILURE;
 	}
+	// Check Max Frame Store Num which is configured in Vivado block design
+	xil_printf("MaxFrameStoreNum=%d\r\n", Config->MaxFrameStoreNum);
 
 	/* Setup frame counter and delay counter for both channels
 	 *
@@ -499,6 +523,11 @@ int main()
 			xil_printf("DMA Mismatch Error\r\n");
 		return XST_FAILURE;
 	}
+	Status = XAxiVdma_StartParking(&AxiVdma, fbActive, XAXIVDMA_READ);
+	if (Status != XST_SUCCESS) {
+		xil_printf("Start Park failed\r\n");
+		return XST_FAILURE;
+	}
 	xil_printf("Test passed\r\n");
 
     Lq070Out_Ctrl = 0;
@@ -513,10 +542,10 @@ int main()
     {
     	for (j = 0; j < 800; j++)
 		{
-			FB(WriteFrameAddr, (i*800+j)) = 1;
+			FB(WriteFrameAddr[0], (i*800+j)) = 1;
 		}
     }
-    Xil_DCacheFlushRange(WriteFrameAddr, size);
+    Xil_DCacheFlushRange(WriteFrameAddr[0], size);
 
     // Setup Resource frame
     xil_printf("Setup Resource frame buffer\r\n");
@@ -530,36 +559,60 @@ int main()
     {
     	for (j = 0; j < 800 / 16; j++)
     	{
-    		XGfxaccel_BitBlt(ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, WriteFrameAddr, j * 16, i * 16);
+    		XGfxaccel_BitBlt(ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, WriteFrameAddr[0], j * 16, i * 16, XGFXACCEL_BB_NONE);
     	}
     }
 
     // Invoke fill rectangle accelerator
-    XGfxaccel_FillRect(WriteFrameAddr, 80, 80, 719, 399, RGB8(255, 255, 255));
+    XGfxaccel_FillRect(WriteFrameAddr[0], 80, 80, 719, 399, RGB8(255, 255, 255));
     // Invoke fill rectangle accelerator
-    XGfxaccel_FillRect(WriteFrameAddr,  83,  83, 716, 396, RGB8(0, 64, 255));
+    XGfxaccel_FillRect(WriteFrameAddr[0],  83,  83, 716, 396, RGB8(0, 64, 255));
     // Invoke fill rectangle accelerator
-    XGfxaccel_FillRect(WriteFrameAddr,  80, 240, 719, 241, RGB8(255, 255, 255));
+    XGfxaccel_FillRect(WriteFrameAddr[0],  80, 240, 719, 241, RGB8(255, 255, 255));
     // Invoke fill rectangle accelerator
-    XGfxaccel_FillRect(WriteFrameAddr, 480, 240, 481, 399, RGB8(255, 255, 255));
+    XGfxaccel_FillRect(WriteFrameAddr[0], 480, 240, 481, 399, RGB8(255, 255, 255));
 
     // Invalidate frame buffer to reload updated data
-    Xil_DCacheInvalidateRange(ReadFrameAddr, size);
+    Xil_DCacheInvalidateRange(WriteFrameAddr[0], size);
 
     // Output results
-    xil_printf("Read Frame address: 0x%x", ReadFrameAddr);
+    xil_printf("Read Frame address: 0x%x", WriteFrameAddr[0]);
     for (i = 0; i < 8; i++)
     {
     	xil_printf("\r\nfb(%03d): ", i);
     	for (j = 0; j < 16; j++)
 		{
-    		xil_printf("%02x ", FB(ReadFrameAddr, ((i+76)*800+(j+76))) & 0xFF);
+    		xil_printf("%02x ", FB(WriteFrameAddr[0], ((i+76)*800+(j+76))) & 0xFF);
 		}
     }
 	xil_printf("\r\n");
 
 	drawTrianglePolygons();
+	for (i = 0; i < 62500000; i++); // 1sec wait
 
+	x = 0;
+	y = 0;
+	xil_printf("Loop starts.\r\n");
+	while (1) {
+   		XGfxaccel_BitBlt(ResourceAddr, 0, 0, 800, 480, WriteFrameAddr[fbBackgd], 0, 0, XGFXACCEL_BB_NONE);
+	    XGfxaccel_FillRect(WriteFrameAddr[fbBackgd], x * 16, y * 16, x * 16 + 63, y * 16 + 63, RGB8(255, 255, 255));
+	    x += 1;
+	    if (x == 47)
+	    {
+	    	x = 0;
+	    	y += 1;
+	    	if (y == 27) y = 0;
+	    }
+		fbActive ^= 1;
+		fbBackgd ^= 1;
+		Status = XAxiVdma_StartParking(&AxiVdma, fbActive, XAXIVDMA_READ);
+		if (Status != XST_SUCCESS) {
+			xil_printf("Start Park failed\r\n");
+			return XST_FAILURE;
+		}
+//	    xil_printf("current frame = %d\r\n", fbActive);
+		for (i = 0; i < 625000*2; i++); // 20ms wait
+	}
     xil_printf("--- Exiting main() --- \r\n");
 
 	return 0;
@@ -589,12 +642,11 @@ static int ReadSetup(XAxiVdma *InstancePtr)
 	ReadCfg.Stride = FRAME_HORIZONTAL_LEN;
 	ReadCfg.FrameDelay = 0;  /* This example does not test frame delay */
 
-	ReadCfg.EnableCircularBuf = 1;
-	ReadCfg.EnableSync = 1;  /* With Gen-Lock */
+	ReadCfg.EnableCircularBuf = 0;
+	ReadCfg.EnableSync = 1;  /* With F sync */
 
 	ReadCfg.PointNum = 0;
 	ReadCfg.EnableFrameCounter = 0; /* Endless transfers */
-
 	ReadCfg.FixedFrameStoreAddr = 0; /* We are not doing parking */
 
 	Status = XAxiVdma_DmaConfig(InstancePtr, XAXIVDMA_READ, &ReadCfg);
