@@ -1,0 +1,7 @@
+//arch = zynq; split = false; format = BIN
+the_ROM_image:
+{
+	[bootloader]D:\Project\workspace\hls_study\hls_study_011\vitis_sw\hw_platform\zynq_fsbl\fsbl.elf
+	D:\Project\workspace\hls_study\hls_study_011\vitis_sw\hw_platform\hw\hls_bd_0_wrapper.bit
+	D:\Project\workspace\zybo_zynq\ip_repo\u-boot.elf
+}

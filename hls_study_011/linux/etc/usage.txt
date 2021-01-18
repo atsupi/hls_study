@@ -1,0 +1,5 @@
+ZYBO zynq project: hls_study_011
+Usage:
+  $ cd /home/linaro/workspace/fb_gfxaccel
+  $ make
+  $ sudo ./fb_gfxaccel
