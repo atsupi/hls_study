@@ -1,9 +1,11 @@
-/*
- * bitmap.h
- *
- *  Created on: 2016/01/11
- *      Author: sigma
- */
+/******************************************************
+ *    Filename:     bitmap.h
+ *     Purpose:     bitmap management utility
+ *  Created on: 	2016/01/11
+ * Modified on:		2021/01/19
+ *      Author: 	atsupi.com
+ *     Version:		1.10
+ ******************************************************/
 
 #ifndef BITMAP_H_
 #define BITMAP_H_

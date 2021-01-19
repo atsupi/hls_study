@@ -1,9 +1,11 @@
-/*
- * bitmap.c
- *
- *  Created on: 2016/01/11
- *      Author: sigma
- */
+/******************************************************
+ *    Filename:     bitmap.c
+ *     Purpose:     bitmap management utility
+ *  Created on: 	2016/01/11
+ * Modified on:		2021/01/19
+ *      Author: 	atsupi.com
+ *     Version:		1.10
+ ******************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -26,7 +26,7 @@ static u32 BlockHorizRead;
 static u32 BlockVertRead;
 static u32 page_size;
 static u32 VdmaAddress = 0;
-u32 frame_page = 0x200000;
+u32 frame_page = 0x00200000; // 2MB page
 
 static u32 VirtReadFrameAddr[NUMBER_OF_READ_FRAMES];
 static u32 PhysReadFrameAddr[NUMBER_OF_READ_FRAMES];
@@ -231,7 +231,6 @@ int vdma_start(int mode)
 int vdma_stop(int mode)
 {
 	u32 data;
-	int frmdly = 0;
 	printf("VDMA Stop(%d)\n", mode);
 
 	if (mode == VDMA_READ)
@@ -267,7 +266,6 @@ u32 vdma_get_frame_address(int fbnum)
 int vdma_start_parking(int mode, int fbnum)
 {
 	u32 data;
-	int frmdly = 0;
 #ifdef DEBUG
 	printf("VDMA Start Parking(%d): %d\n", mode, fbnum);
 #endif
@@ -302,7 +300,6 @@ int vdma_start_parking(int mode, int fbnum)
 int vdma_stop_parking(int mode)
 {
 	u32 data;
-	int frmdly = 0;
 #ifdef DEBUG
 	printf("VDMA Stop Parking(%d)\n", mode);
 #endif

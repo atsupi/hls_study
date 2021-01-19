@@ -18,9 +18,9 @@
 #define XPAR_AXI_VDMA_0_BASEADDR		0x44A10000U
 
 // platform status result
-#define PST_SUCCESS					(0)
-#define PST_FAILURE					(1)
-#define PST_VDMA_MISMATCH_ERROR		(2)
+#define PST_SUCCESS						(0)
+#define PST_FAILURE						(1)
+#define PST_VDMA_MISMATCH_ERROR			(2)
 
 // display parameters 
 #define DISP_WIDTH						800

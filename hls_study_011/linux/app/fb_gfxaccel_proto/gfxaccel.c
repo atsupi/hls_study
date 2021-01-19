@@ -1,5 +1,5 @@
 /******************************************************
- *    Filename:     gfxaccel.h
+ *    Filename:     gfxaccel.c
  *     Purpose:     graphics accelerator driver
  *  Created on: 	2021/01/18
  * Modified on:
@@ -17,8 +17,6 @@
 #include "azplf_bsp.h"
 #include "gfxaccel.h"
 
-
-static u32 page_size;
 static u32 GfxaccelAddress = 0;
 
 u32 gfxaccel_read_reg(u32 adr, u32 offset)
@@ -50,6 +48,7 @@ u32 gfxaccel_init(void)
 	int fd;
 	u32 result;
 	u32 baseAddr = GFXACCEL_BASE_ADDR;
+	u32 page_size;
 
 	printf("In gfxaccel_init()\n");
 	page_size = sysconf(_SC_PAGESIZE);
@@ -170,7 +169,6 @@ static void HwIpGfxaccel(u32 src_fb, u16 x1, u16 y1, u16 dx, u16 dy, u32 dst_fb,
 {
 	gfxaccel_set_src_fb(src_fb);
 	gfxaccel_set_dst_fb(dst_fb);
-    // Invoke XTop accelerator
 	gfxaccel_set_mode(mode); // mode
 	gfxaccel_set_op(op); // op
 	gfxaccel_set_col(col); // col
@@ -181,13 +179,14 @@ static void HwIpGfxaccel(u32 src_fb, u16 x1, u16 y1, u16 dx, u16 dy, u32 dst_fb,
 	gfxaccel_set_x2(x2); // x2
 	gfxaccel_set_y2(y2); // y2
 
+    // Invoke accelerator
 #ifdef DEBUG
     printf("Wait for Idle signal...");
 #endif
     while (!gfxaccel_isidle());
 #ifdef DEBUG
     printf("Done.\r\n\r\n");
-    printf("Send start XTop IP signal\r\n");
+    printf("Send start Gfxaccel IP signal\r\n");
 #endif
     gfxaccel_start();
 #ifdef DEBUG
