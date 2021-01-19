@@ -1,10 +1,10 @@
 /******************************************************
- *    Filename:     fb_gfxaccel_proto.c 
+ *    Filename:     fb_gfxaccel_alpha.c 
  *     Purpose:     test app for graphics acceleration IP
  *  Target Plf:     ZYBO 
- *  Created on: 	2021/01/14
+ *  Created on: 	2021/01/20
  *      Author: 	atsupi.com
- *     Version:		1.20
+ *     Version:		1.0
  ******************************************************/
 
 //#define DEBUG
