@@ -19,6 +19,8 @@
 #include "azplf_bsp.h"
 #include "vdma.h"
 #include "gfxaccel.h"
+#include "lq070out.h"
+#include "bitmap.h"
 
 // Frame Buffer Memory Base Address
 #define MEM_BASE_ADDR		(DDR_BASE_ADDR + 0x01000000)
@@ -42,16 +44,6 @@ static int fbBackgd;
 
 static int ReadSetup(void);
 static int StartTransfer(void);
-
-// LQ070 LCD display module control IP
-static u32 Lq070OutAddress = 0;
-// definitions for LQ070 control IP
-#define LQ070OUT_BASE_ADDR		XPAR_AXI_LQ070_OUT_0_BASEADDR
-#define LQ070OUT_MODE_OFFSET	0x00
-#define   LQ070_PG_NONE		  	0x00		// Pass-through
-#define   LQ070_PG_CBAR		  	0x01		// Color Bar pattern
-#define   LQ070_PG_LAMP		  	0x02		// Lamp pattern (64 step)
-#define   LQ070_PG_HTCH		  	0x03		// Hatch pattern
 
 void drawTrianglePolygons(void)
 {
@@ -107,46 +99,31 @@ static void fillColorTiles(u32 baseAddr)
 	}
 }
 
-static void lq070out_init(void)
+static void copyFramebufferToBitmap(u32 *dst, u32 *src, int width, int height, int stride)
 {
-	int fd;
-	u32 result;
-	u32 baseAddr = LQ070OUT_BASE_ADDR;
-	u32 page_size;
-
-	page_size = sysconf(_SC_PAGESIZE);
-
-	printf("In lq070out_init()\n");
-	page_size = sysconf(_SC_PAGESIZE);
-	printf("File page size=0x%08x (%dKB)\n", page_size, page_size>>10);
-
-	fd = open("/dev/mem", O_RDWR);
-	result = (u32)mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, baseAddr);
-	printf("Mapping I/O: 0x%08x to vmem: 0x%08x\n", baseAddr, result);
-	close(fd);
-
-	if (result == 0 || result == 0xFFFFFFFF)
+	int x, y;
+	u32 pix;
+	u32 *ptr = src;
+	for (y = 0; y < height; y++)
 	{
-		printf("Error: Mapping failure\n");
-		return;
+		for (x = 0; x < width; x++)
+		{
+			pix = ptr[x];
+			// Shift VDMA bitmap pixel data to RGB bitmap
+			pix = ((pix & 0x3FC00000) >> 6) | ((pix & 0xFF000) >> 4) | ((pix & 0x3FC) >> 2);
+			*dst++ = pix;
+		}
+		ptr += stride;
 	}
-
-	Lq070OutAddress = result;
 }
 
-static void lq070out_write_reg(u32 adr, u32 offset, u32 value)
+static void saveFBtoBitmapFile(u32 baseAddr)
 {
-	if (!adr)
-	{
-		printf("lq070out_write_reg baseaddress error!\n");
-		return;
-	}
-	*(volatile unsigned int *)(adr + offset) = value;
-}
-
-static void lq070out_setmode(int mode)
-{
-	lq070out_write_reg(Lq070OutAddress, 0, (u32)mode);
+	Bitmap bmp;
+	loadBitmapFile("base.bmp", &bmp);
+	copyFramebufferToBitmap(bmp.data, (u32 *)vdma_get_frame_address(0), DISP_WIDTH, DISP_HEIGHT, DISP_WIDTH);
+	saveBitmapFile(&bmp, "result.bmp");
+	free(bmp.data);
 }
 
 static int parse_argument(int argc, char *argv[])
@@ -180,6 +157,7 @@ int main(int argc, char *argv[])
 	u32 size = FRAME_HORIZONTAL_LEN * FRAME_VERTICAL_LEN;
 	int status;
 	int mode;
+	u32 ReadAddr;
 
 	mode = parse_argument(argc, argv);
 
@@ -267,7 +245,7 @@ int main(int argc, char *argv[])
 
     // Output results
 	ReadAddr = vdma_get_frame_address(0);
-    printf("Read Frame address: 0x%x", Addr);
+    printf("Read Frame address: 0x%x", ReadAddr);
     for (i = 0; i < 8; i++)
     {
     	printf("\r\nfb(%03d): ", i);
@@ -277,6 +255,7 @@ int main(int argc, char *argv[])
 		}
     }
 	printf("\r\n");
+	saveFBtoBitmapFile(ReadAddr);
 
 	drawTrianglePolygons();
 	sleep(1); // 1sec wait
@@ -296,8 +275,8 @@ int main(int argc, char *argv[])
 	    }
 		fbActive ^= 1;
 		fbBackgd ^= 1;
-		Status = vdma_start_parking(VDMA_READ, fbActive);
-		if (Status != PST_SUCCESS) {
+		status = vdma_start_parking(VDMA_READ, fbActive);
+		if (status != PST_SUCCESS) {
 			printf("Start Park failed\r\n");
 			return PST_FAILURE;
 		}
