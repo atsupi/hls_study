@@ -45,7 +45,6 @@ typedef struct tagBitmap {
 } Bitmap;
 
 #define RGBDATA(a, r, g, b)		((r << 16)|(g << 8)|(b))
-#define swap(a, b)				{ u32 tmp = b; b = a; a = tmp; }
 
 #define FONTSIZEX				16
 #define FONTSIZEY				16

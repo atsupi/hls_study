@@ -2,9 +2,9 @@
  *    Filename:     lq070out.c
  *     Purpose:     LQ070 LCD display driver
  *  Created on: 	2021/01/20
- * Modified on:
+ * Modified on:		2021/01/21
  *      Author: 	atsupi.com
- *     Version:		1.00
+ *     Version:		1.10
  ******************************************************/
 
 //#define DEBUG
@@ -17,16 +17,13 @@
 #include "azplf_bsp.h"
 #include "lq070out.h"
 
-// LQ070 LCD display module control IP
-static u32 Lq070OutAddress = 0;
-
-void lq070out_init(void)
+void lq070out_init(LQ070outInstance *inst, u32 baseAddr)
 {
 	int fd;
 	u32 result;
-	u32 baseAddr = LQ070OUT_BASE_ADDR;
 	u32 page_size;
 
+	inst->baseAddress = baseAddr;
 	page_size = sysconf(_SC_PAGESIZE);
 
 	printf("In lq070out_init()\n");
@@ -44,7 +41,7 @@ void lq070out_init(void)
 		return;
 	}
 
-	Lq070OutAddress = result;
+	inst->virtAddress = result;
 }
 
 void lq070out_write_reg(u32 adr, u32 offset, u32 value)
@@ -57,7 +54,7 @@ void lq070out_write_reg(u32 adr, u32 offset, u32 value)
 	*(volatile unsigned int *)(adr + offset) = value;
 }
 
-void lq070out_setmode(int mode)
+void lq070out_setmode(LQ070outInstance *inst, int mode)
 {
-	lq070out_write_reg(Lq070OutAddress, LQ070OUT_MODE_OFFSET, (u32)mode);
+	lq070out_write_reg(inst->virtAddress, LQ070OUT_MODE_OFFSET, (u32)mode);
 }

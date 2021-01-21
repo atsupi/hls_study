@@ -71,15 +71,21 @@
 #define GFXACCEL_CONTROL_ADDR_MODE_DATA   0x58
 #define GFXACCEL_CONTROL_ADDR_OP_DATA     0x60
 
+// instance definition
+typedef struct _GfxaccelInstance {
+	u32 baseAddress;						// physical address
+	u32 virtAddress;						// virtual address
+} GfxaccelInstance;
+
 // external functions
-extern u32 gfxaccel_init(void);
-extern void gfxaccel_start(void);
-extern void gfxaccel_stop(void);
-extern u32 gfxaccel_isidle(void);
-extern u32 gfxaccel_isready(void);
-extern void gfxaccel_fill_rect(u32 fb, u16 x1, u16 y1, u16 x2, u16 y2, u32 col);
-extern void gfxaccel_draw_line(u32 fb, u16 x1, u16 y1, u16 x2, u16 y2, u32 col);
-extern void gfxaccel_bitblt(u32 src_fb, u16 x1, u16 y1, u16 dx, u16 dy, u32 dst_fb, u16 x2, u16 y2, u8 op);
+extern u32 gfxaccel_init(GfxaccelInstance *inst, u32 baseAddr);
+extern void gfxaccel_start(GfxaccelInstance *inst);
+extern void gfxaccel_stop(GfxaccelInstance *inst);
+extern u32 gfxaccel_isidle(GfxaccelInstance *inst);
+extern u32 gfxaccel_isready(GfxaccelInstance *inst);
+extern void gfxaccel_fill_rect(GfxaccelInstance *inst, u32 fb, u16 x1, u16 y1, u16 x2, u16 y2, u32 col);
+extern void gfxaccel_draw_line(GfxaccelInstance *inst, u32 fb, u16 x1, u16 y1, u16 x2, u16 y2, u32 col);
+extern void gfxaccel_bitblt(GfxaccelInstance *inst, u32 src_fb, u16 x1, u16 y1, u16 dx, u16 dy, u32 dst_fb, u16 x2, u16 y2, u8 op);
 
 
 #endif // GFXACCEL_H_

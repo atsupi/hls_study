@@ -1,7 +1,7 @@
 LIBS = libazplf_util.so
 OBJS = bitmap.o
 CC = arm-linux-gnueabihf-gcc
-CFLAGS = -g -shared -fPIC -I../include -v
+CFLAGS = -g -shared -fPIC -I../include 
 
 all : $(LIBS)
 	cp ${LIBS} ../${LIBS}

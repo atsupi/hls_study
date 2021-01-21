@@ -1,7 +1,7 @@
 LIBS = libazplf_hal.so
 OBJS = vdma.o gfxaccel.o lq070out.o
 CC = arm-linux-gnueabihf-gcc
-CFLAGS = -g  -shared -fPIC -I../include -v
+CFLAGS = -g  -shared -fPIC -I../include
 
 all : $(LIBS)
 	cp ${LIBS} ../${LIBS}

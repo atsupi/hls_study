@@ -1,8 +1,8 @@
 /******************************************************
- *    Filename:     fb_gfxaccel_lib.c 
+ *    Filename:     fb_gfxaccel_inst.c 
  *     Purpose:     test app for graphics acceleration IP
  *  Target Plf:     ZYBO 
- *  Created on: 	2021/01/20
+ *  Created on: 	2021/01/21
  *      Author: 	atsupi.com
  *     Version:		1.0
  ******************************************************/
@@ -21,25 +21,32 @@
 #include "azplf_util.h"
 
 // Frame Buffer Memory Base Address
-#define MEM_BASE_ADDR		(DDR_BASE_ADDR + 0x01000000)
+//#define MEM_BASE_ADDR		(DDR_BASE_ADDR + 0x01000000)
 
-#define READ_ADDRESS_BASE	MEM_BASE_ADDR
-#define WRITE_ADDRESS_BASE	MEM_BASE_ADDR
+//#define READ_ADDRESS_BASE	MEM_BASE_ADDR
+//#define WRITE_ADDRESS_BASE	MEM_BASE_ADDR
 
 /* 
  * Data address
  * 
  * Read and write sub-frame use the same settings
  */
-static u32 WriteFrameAddr[NUMBER_OF_WRITE_FRAMES];
+static u32 WriteFrameAddr[NUMBER_OF_FRAMES];
 static u32 ResourceAddr; // resource buffer
+static u32 CamFrameAddr; // dummy camera buffer
+
+// driver instances
+static VdmaInstance vdmaInst_0;
+static VdmaInstance vdmaInst_1;  /* dummy for testing */
+static LQ070outInstance lq070Inst;
+static GfxaccelInstance gfxaccelInst;
 
 static int fbActive;
 static int fbBackgd;
 
 /******************* Function Prototypes ************************************/
 
-static int ReadSetup(void);
+static int ReadSetup(VdmaInstance *inst);
 
 void drawTrianglePolygons(void)
 {
@@ -73,11 +80,11 @@ void drawTrianglePolygons(void)
 	};
 	int i;
 
-	gfxaccel_draw_line(WriteFrameAddr[0], points[0].x, points[0].y, points[1].x, points[1].y, 0xffffffff);
+	gfxaccel_draw_line(&gfxaccelInst, WriteFrameAddr[0], points[0].x, points[0].y, points[1].x, points[1].y, 0xffffffff);
 	for (i = 0; i < sizeof(points)/sizeof(points[0]) - 2; i++)
 	{
-		gfxaccel_draw_line(WriteFrameAddr[0], points[i+1].x, points[i+1].y, points[i+2].x, points[i+2].y, 0xffffffff);
-		gfxaccel_draw_line(WriteFrameAddr[0], points[i+2].x, points[i+2].y, points[i].x, points[i].y, 0x3ff00000);
+		gfxaccel_draw_line(&gfxaccelInst, WriteFrameAddr[0], points[i+1].x, points[i+1].y, points[i+2].x, points[i+2].y, 0xffffffff);
+		gfxaccel_draw_line(&gfxaccelInst, WriteFrameAddr[0], points[i+2].x, points[i+2].y, points[i].x, points[i].y, 0x3ff00000);
 	}
 }
 
@@ -90,7 +97,7 @@ static void fillColorTiles(u32 baseAddr)
 		for (j = 0; j < 800 / 16; j++) {
 			col = ((i) << 2) | (j);
 			data = RGB1(col >> 2, col >> 1, col);
-			gfxaccel_fill_rect(baseAddr, j * 16, i * 16, j * 16 + 15, i * 16 + 15, data);
+			gfxaccel_fill_rect(&gfxaccelInst, baseAddr, j * 16, i * 16, j * 16 + 15, i * 16 + 15, data);
 		}
 	}
 }
@@ -117,7 +124,7 @@ static void saveFBtoBitmapFile(u32 baseAddr)
 {
 	Bitmap bmp;
 	loadBitmapFile("base.bmp", &bmp);
-	copyFramebufferToBitmap(bmp.data, (u32 *)vdma_get_frame_address(0), DISP_WIDTH, DISP_HEIGHT, DISP_WIDTH);
+	copyFramebufferToBitmap(bmp.data, (u32 *)vdma_get_frame_address(&vdmaInst_0, 0), DISP_WIDTH, DISP_HEIGHT, DISP_WIDTH);
 	saveBitmapFile(&bmp, "result.bmp");
 	free(bmp.data);
 }
@@ -160,6 +167,7 @@ int main(int argc, char *argv[])
 	WriteFrameAddr[0] = WRITE_ADDRESS_BASE;
 	WriteFrameAddr[1] = WRITE_ADDRESS_BASE + frame_page;
 	ResourceAddr      = WriteFrameAddr[1]  + frame_page;
+	CamFrameAddr      = ResourceAddr + frame_page;
 
 	fbActive = 0;
 	fbBackgd = 1;
@@ -170,12 +178,15 @@ int main(int argc, char *argv[])
 	 * The user IP should pass this information to the AXI DMA core.
 	 */
 	printf("Step 0\n");
-	vdma_init();
+	vdma_init(&vdmaInst_0, VDMA_0_BASEADDRESS, WriteFrameAddr[0]);
+	if (VDMA_INSTANCE_NUM > 1) {
+//		vdma_init(&vdmaInst_1, VDMA_1_BASEADDRESS, CamFrameAddr);
+	}
 
 	printf("Step 1\n");
 	/* Setup the read channel
 	 */
-	status = ReadSetup();
+	status = ReadSetup(&vdmaInst_0);
 	if (status != PST_SUCCESS) {
 		printf("Read channel setup failed %d\r\n", status);
 		if(status == PST_VDMA_MISMATCH_ERROR)
@@ -185,32 +196,31 @@ int main(int argc, char *argv[])
 	printf("Step 2\n");
 
 	// Start DMA engine to transfer
-	status = vdma_start(VDMA_READ);
+	status = vdma_start(&vdmaInst_0, VDMA_READ);
 	if (status != PST_SUCCESS) {
 		printf("Start read transfer failed %d\r\n", status);
 		return PST_FAILURE;
 	}
 
-	status = vdma_start_parking(VDMA_READ, fbActive);
+	status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbActive);
 	if (status != PST_SUCCESS) {
 		printf("Start Park failed\r\n");
 		return PST_FAILURE;
 	}
 	printf("Test passed\r\n");
 
-	lq070out_init();
-    lq070out_setmode(LQ070_PG_NONE);
+	lq070out_init(&lq070Inst, LQ070OUT_BASE_ADDR);
+    lq070out_setmode(&lq070Inst, LQ070_PG_NONE);
     printf("Hello World\n\r");
 
     printf("Initialize gfxaccel instance\r\n");
-	if (gfxaccel_init() == PST_FAILURE)
-	{
+	if (gfxaccel_init(&gfxaccelInst, GFXACCEL_BASE_ADDR) == PST_FAILURE) {
 		return PST_FAILURE;
 	}
 
     // Clear frame buffer
     printf("Clear frame buffer\r\n");
-    gfxaccel_fill_rect(WriteFrameAddr[0], 0, 0, 799, 479, 0x0);
+    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[0], 0, 0, 799, 479, 0x0);
 
     // Setup Resource frame
     printf("Setup Resource frame buffer\r\n");
@@ -221,24 +231,23 @@ int main(int argc, char *argv[])
     {
     	for (j = 0; j < 800 / 16; j++)
     	{
-    		gfxaccel_bitblt(ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, WriteFrameAddr[0], j * 16, i * 16, GFXACCEL_BB_NONE);
+    		gfxaccel_bitblt(&gfxaccelInst, ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, WriteFrameAddr[0], j * 16, i * 16, GFXACCEL_BB_NONE);
     	}
     }
 
     // Invoke fill rectangle accelerator
-    gfxaccel_fill_rect(WriteFrameAddr[0], 80, 80, 719, 399, RGB8(255, 255, 255));
+    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[0], 80, 80, 719, 399, RGB8(255, 255, 255));
     // Invoke fill rectangle accelerator
-    gfxaccel_fill_rect(WriteFrameAddr[0],  83,  83, 716, 396, RGB8(0, 64, 255));
+    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[0],  83,  83, 716, 396, RGB8(0, 64, 255));
     // Invoke fill rectangle accelerator
-    gfxaccel_fill_rect(WriteFrameAddr[0],  80, 240, 719, 241, RGB8(255, 255, 255));
+    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[0],  80, 240, 719, 241, RGB8(255, 255, 255));
     // Invoke fill rectangle accelerator
-    gfxaccel_fill_rect(WriteFrameAddr[0], 480, 240, 481, 399, RGB8(255, 255, 255));
+    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[0], 480, 240, 481, 399, RGB8(255, 255, 255));
 
     // Invalidate frame buffer to reload updated data
-//    Xil_DCacheInvalidateRange(WriteFrameAddr[0], size);
 
     // Output results
-	ReadAddr = vdma_get_frame_address(0);
+	ReadAddr = vdma_get_frame_address(&vdmaInst_0, 0);
     printf("Read Frame address: 0x%x", ReadAddr);
     for (i = 0; i < 8; i++)
     {
@@ -258,8 +267,8 @@ int main(int argc, char *argv[])
 	y = 0;
 	printf("Loop starts.\r\n");
 	while (1) {
-		gfxaccel_bitblt(ResourceAddr, 0, 0, 800, 480, WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
-		gfxaccel_fill_rect(WriteFrameAddr[fbBackgd], x * 32, y * 32, x * 32 + 63, y * 32 + 63, RGB8(255, 255, 255));
+		gfxaccel_bitblt(&gfxaccelInst, ResourceAddr, 0, 0, 800, 480, WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
+		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], x * 32, y * 32, x * 32 + 63, y * 32 + 63, RGB8(255, 255, 255));
 	    x += 1;
 	    if (x == 24)
 	    {
@@ -269,7 +278,7 @@ int main(int argc, char *argv[])
 	    }
 		fbActive ^= 1;
 		fbBackgd ^= 1;
-		status = vdma_start_parking(VDMA_READ, fbActive);
+		status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbActive);
 		if (status != PST_SUCCESS) {
 			printf("Start Park failed\r\n");
 			return PST_FAILURE;
@@ -289,14 +298,14 @@ int main(int argc, char *argv[])
  * This function sets up the read channel
  *
  *****************************************************************************/
-static int ReadSetup(void)
+static int ReadSetup(VdmaInstance *inst)
 {
 	int Index;
 	u32 Addr;
 	int status;
 
 	printf("Step 2.1\n");
-	status = vdma_config(VDMA_READ);
+	status = vdma_config(inst, VDMA_READ);
 	if (status != PST_SUCCESS) {
 		printf("Read channel config failed %d\r\n", status);
 		return PST_FAILURE;
@@ -305,14 +314,14 @@ static int ReadSetup(void)
 	printf("Step 2.2\n");
 	// Initialize buffer addresses (physical addresses)
 	Addr = READ_ADDRESS_BASE;
-	for(Index = 0; Index < NUMBER_OF_READ_FRAMES; Index++) {
-		vdma_set_frame_address(Index, Addr);
+	for(Index = 0; Index < NUMBER_OF_FRAMES; Index++) {
+		vdma_set_frame_address(inst, Index, Addr);
 		Addr += frame_page;
 	}
 
 	printf("Step 2.3\n");
 	// Set the buffer addresses for transfer in the DMA engine
-	status = vdma_dma_setbuffer(VDMA_READ);
+	status = vdma_dma_setbuffer(inst, VDMA_READ);
 	if (status != PST_SUCCESS) {
 		printf("Read channel set buffer address failed %d\r\n", status);
 		return PST_FAILURE;

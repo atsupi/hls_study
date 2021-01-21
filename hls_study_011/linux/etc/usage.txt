@@ -1,5 +1,12 @@
 ZYBO zynq project: hls_study_011
 Usage:
   $ cd /home/linaro/workspace/fb_gfxaccel
+  $ pushd lib/azplf_hal
   $ make
-  $ sudo ./fb_gfxaccel
+  $ cd ../azplf_util
+  $ make
+  $ popd
+  $ make
+  $ sudo su
+  # source setenv.sh
+  # ./fb_gfxaccel
