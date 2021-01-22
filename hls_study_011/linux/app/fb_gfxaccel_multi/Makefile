@@ -1,8 +1,8 @@
-PROGRAM = fb_gfxaccel_lib
-OBJS = fb_gfxaccel_lib.o
+PROGRAM = fb_gfxaccel_multi
+OBJS = fb_gfxaccel_multi.o
 CC = arm-linux-gnueabihf-gcc
-CFLAGS = -g -I./lib/include -v
-LDFLAGS = -L./lib -lazplf_hal -lazplf_util
+CFLAGS = -g -I./lib/include
+LDFLAGS = -lpthread -L./lib -lazplf_hal -lazplf_util
 
 all : $(PROGRAM)
 

@@ -2,14 +2,15 @@
  *    Filename:     bitmap.c
  *     Purpose:     bitmap management utility
  *  Created on: 	2016/01/11
- * Modified on:		2021/01/19
+ * Modified on:		2021/01/23
  *      Author: 	atsupi.com
- *     Version:		1.10
+ *     Version:		1.20
  ******************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "azplf_bsp.h"
 #include "bitmap.h"
 
 //#define _DEBUG

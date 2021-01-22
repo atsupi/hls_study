@@ -1,8 +1,8 @@
 /******************************************************
- *    Filename:     fb_gfxaccel_inst.c 
+ *    Filename:     fb_gfxaccel_multi.c 
  *     Purpose:     test app for graphics acceleration IP
  *  Target Plf:     ZYBO 
- *  Created on: 	2021/01/21
+ *  Created on: 	2021/01/23
  *      Author: 	atsupi.com
  *     Version:		1.0
  ******************************************************/
@@ -37,6 +37,8 @@ static GfxaccelInstance gfxaccelInst;
 
 static int fbActive;
 static int fbBackgd;
+
+static int quit = 0;
 
 /******************* Function Prototypes ************************************/
 
@@ -147,14 +149,50 @@ static int parse_argument(int argc, char *argv[])
 	return (mode);
 }
 
+void *thread1(void *arg)
+{
+	int x = 0;
+	int y = 0;
+	int status;
+
+	printf("Loop starts.\r\n");
+	while (1) {
+		gfxaccel_bitblt(&gfxaccelInst, ResourceAddr, 0, 0, 800, 480, WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
+		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], x * 32, y * 32, x * 32 + 63, y * 32 + 63, RGB8(255, 255, 255));
+	    x += 1;
+	    if (x == 24)
+	    {
+	    	x = 0;
+	    	y += 1;
+	    	if (y == 14) y = 0;
+	    }
+		fbActive ^= 1;
+		fbBackgd ^= 1;
+		status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbActive);
+		if (status != PST_SUCCESS) {
+			printf("Start Park failed\r\n");
+			return 0;
+		}
+#ifdef DEBUG
+	    printf("current frame = %d\r\n", fbActive);
+#endif
+
+		if (quit) break;
+		usleep(20000); // 20ms wait
+	}
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int i, j;
-	int x, y;
 	u32 size = FRAME_HORIZONTAL_LEN * FRAME_VERTICAL_LEN;
 	int status;
 	int mode;
 	u32 ReadAddr;
+	pthread_t pt;
+	char ch = ' ';
 
 	mode = parse_argument(argc, argv);
 
@@ -257,30 +295,19 @@ int main(int argc, char *argv[])
 	drawTrianglePolygons();
 	sleep(1); // 1sec wait
 
-	x = 0;
-	y = 0;
-	printf("Loop starts.\r\n");
+	// create graphics worker thread
+	pthread_create(&pt, NULL, &thread1, NULL);
+
 	while (1) {
-		gfxaccel_bitblt(&gfxaccelInst, ResourceAddr, 0, 0, 800, 480, WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
-		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], x * 32, y * 32, x * 32 + 63, y * 32 + 63, RGB8(255, 255, 255));
-	    x += 1;
-	    if (x == 24)
-	    {
-	    	x = 0;
-	    	y += 1;
-	    	if (y == 14) y = 0;
-	    }
-		fbActive ^= 1;
-		fbBackgd ^= 1;
-		status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbActive);
-		if (status != PST_SUCCESS) {
-			printf("Start Park failed\r\n");
-			return PST_FAILURE;
+		scanf("%c", &ch);
+		if (ch == 'x') {
+			quit = 1; // quit thread
+			sleep(2); // wait until thread terminates
+			break;
+		} else {
+			printf("Command not found\r\n");
 		}
-#ifdef DEBUG
-	    printf("current frame = %d\r\n", fbActive);
-#endif
-		usleep(20000); // 20ms wait
+		sleep(1);
 	}
     printf("--- Exiting main() --- \r\n");
 
