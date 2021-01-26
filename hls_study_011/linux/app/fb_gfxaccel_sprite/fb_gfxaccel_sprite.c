@@ -294,6 +294,13 @@ static int ProcessTime(void)
 	return 0;
 }
 
+static void DrawDebugInfo(int fbNum)
+{
+	u8 info[16];
+	sprintf(info, "%04d:%06d", (int)(system_time / 60), (int)system_time);
+	drawText(WriteFrameAddr[fbNum], 606, 448, info);
+}
+
 static void DrawTestFrame(int fbNum)
 {
 	int i, j;
@@ -327,6 +334,7 @@ static void UpdateFrame(void)
 {
 	static int x = 0;
 	static int y = 0;
+	int i, j;
 	int status;
 
 	// draw backfround frame as per scene number
@@ -339,8 +347,21 @@ static void UpdateFrame(void)
 	else
 	{
 		gfxaccel_bitblt(&gfxaccelInst, 
-			ResourceAddr, 0, 0, 800, 480, 
+			ResourceAddr, 0, 0, 800, 128, 
 			WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
+		for (j = 0; j < 15; j++) {
+			for (i = 0; i < 7; i++) {
+				gfxaccel_bitblt(&gfxaccelInst, 
+					ResourceAddr, 32, 0, 32, 32, 
+					WriteFrameAddr[fbBackgd], (i + 9 ) * 32, j * 32, 
+					GFXACCEL_BB_NONE);
+			}
+		}
+		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 
+			0, 128, 287, 479, 0);
+		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 
+			512, 128, 799, 479, 0);
+		DrawDebugInfo(fbBackgd);
 		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 
 			x * 32, y * 32, x * 32 + 63, y * 32 + 63, 
 			RGB8(255, 255, 255));
@@ -351,6 +372,8 @@ static void UpdateFrame(void)
 	    }
 		drawSprite(&Sprite1, WriteFrameAddr[fbBackgd], system_time);
 		drawSprite(&Sprite2, WriteFrameAddr[fbBackgd], system_time);
+		Sprite2.y += 2;
+		if (Sprite2.y > 448) Sprite2.y = 0;
 	}
 
 	// switch display frame on double buffer

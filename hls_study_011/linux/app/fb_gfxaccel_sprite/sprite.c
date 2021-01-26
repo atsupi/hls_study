@@ -79,7 +79,7 @@ void drawSpriteWithAnimation(Sprite *inst, u32 wrBufAddr, u32 system_time)
 		gfxaccel_bitblt(l_ptGfxaccel, 
 			l_resAddr, res_x, res_y, size_x, size_y, 
 			wrBufAddr, pos_x, pos_y, 
-			GFXACCEL_BB_NONE);
+			GFXACCEL_BB_OR);
 	}
 }
 
