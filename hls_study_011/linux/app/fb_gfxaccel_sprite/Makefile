@@ -1,5 +1,5 @@
 PROGRAM = fb_gfxaccel_sprite
-OBJS = fb_gfxaccel_sprite.o sprite.o 
+OBJS = fb_gfxaccel_sprite.o sprite.o font.o
 CC = arm-linux-gnueabihf-gcc
 CFLAGS = -g -I./lib/include
 LDFLAGS = -lpthread -L./lib -lazplf_hal -lazplf_util
@@ -18,6 +18,7 @@ $(PROGRAM) : $(OBJS) ./lib/libazplf_hal.so ./lib/libazplf_util.so
 clean :
 	rm -rfv *.o
 	rm -rfv $(PROGRAM)
+	rm -rfv ./lib/lib*.so
 
 .PHONY : clean
 
@@ -25,3 +26,4 @@ clean :
 
 #iicps.o: iicps.h
 sprite.o: sprite.h
+font.o: font.h

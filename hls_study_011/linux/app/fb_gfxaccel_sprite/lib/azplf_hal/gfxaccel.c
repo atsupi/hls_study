@@ -2,9 +2,9 @@
  *    Filename:     gfxaccel.c
  *     Purpose:     graphics accelerator driver
  *  Created on: 	2021/01/18
- * Modified on:
+ * Modified on:		2021/01/26
  *      Author: 	atsupi.com
- *     Version:		0.80
+ *     Version:		0.90
  ******************************************************/
 
 //#define DEBUG
@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include "azplf_bsp.h"
 #include "gfxaccel.h"
+
+static u32 page_size;
 
 u32 gfxaccel_read_reg(u32 adr, u32 offset)
 {
@@ -45,7 +47,6 @@ u32 gfxaccel_init(GfxaccelInstance *inst, u32 baseAddr)
 {
 	int fd;
 	u32 result;
-	u32 page_size;
 
 	inst->baseAddress = baseAddr;
 	printf("In gfxaccel_init()\n");
@@ -65,6 +66,12 @@ u32 gfxaccel_init(GfxaccelInstance *inst, u32 baseAddr)
 
 	inst->virtAddress = result;
 	return (result);
+}
+
+void gfxaccel_deinit(GfxaccelInstance *inst)
+{
+	if (inst->virtAddress)
+		munmap((void *)inst->virtAddress, page_size);
 }
 
 void gfxaccel_start(GfxaccelInstance *inst)

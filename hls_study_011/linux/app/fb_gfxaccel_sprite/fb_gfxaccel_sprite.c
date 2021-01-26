@@ -20,6 +20,7 @@
 #include "azplf_bsp.h"
 #include "azplf_hal.h"
 #include "azplf_util.h"
+#include "font.h"
 #include "sprite.h"
 
 /* 
@@ -209,9 +210,9 @@ static void saveFBtoBitmapFile(u32 baseAddr)
 static void loadBitmapFiletoFB(u32 baseAddr)
 {
 	Bitmap bmp;
-	printf("load bitmap file res\\resource.bmp ...\n");
-//	loadBitmapFile("res\\resource.bmp", &bmp);
-	loadBitmapFile("resource.bmp", &bmp);
+	printf("load bitmap file res/resource.bmp ...\n");
+	loadBitmapFile("./res/resource.bmp", &bmp);
+//	loadBitmapFile("resource.bmp", &bmp);
 	printf("done.\n");
 	printf("copy bitmap to resource frame buffer ...\n");
 	copyBitmapToFramebuffer((u32 *)baseAddr, bmp.data, 
@@ -301,7 +302,10 @@ static void DrawTestFrame(int fbNum)
     {
     	for (j = 0; j < 800 / 16; j++)
     	{
-    		gfxaccel_bitblt(&gfxaccelInst, ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, WriteFrameAddr[fbNum], j * 16, i * 16, GFXACCEL_BB_NONE);
+    		gfxaccel_bitblt(&gfxaccelInst, 
+				ResourceAddr, j * 16, (i /*% 15*/) * 16, 16, 16, 
+				WriteFrameAddr[fbNum], j * 16, i * 16, 
+				GFXACCEL_BB_NONE);
     	}
     }
 
@@ -330,6 +334,7 @@ static void UpdateFrame(void)
 	{
 		DrawTestFrame(fbBackgd);
 		drawTrianglePolygons(fbBackgd);
+		drawText(WriteFrameAddr[fbBackgd], 240, 448, "2021 (c) ATSUPI.COM");
 	}
 	else
 	{
@@ -502,6 +507,11 @@ int main(int argc, char *argv[])
 	basePos.y = 0;
 	configSpriteResouce(&gfxaccelInst, ResourceAddr, &basePos);
 
+	printf("configure Font Resource\n");
+	basePos.x = 256;
+	basePos.y = 0;
+	configFontResouce(&gfxaccelInst, ResourceAddr, &basePos);
+
 	sleep(1); // 1sec wait before starting graphics work thread
 
 	// create mutex for thread handling
@@ -551,6 +561,8 @@ int main(int argc, char *argv[])
     printf("--- Exiting main() --- \r\n");
 	pthread_mutex_destroy(&mutex);
 	munmap((void *)mappedResAddr, frame_page);
+	gfxaccel_deinit(&gfxaccelInst);
+	lq070out_deinit(&lq070Inst);
 	vdma_deinit(&vdmaInst_0);
 
 	return 0;

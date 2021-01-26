@@ -2,9 +2,9 @@
  *    Filename:     lq070out.h 
  *     Purpose:     LQ070 LCD display driver
  *  Created on: 	2021/01/20
- * Modified on:		2021/01/21
+ * Modified on:		2021/01/26
  *      Author: 	atsupi.com 
- *     Version:		1.10
+ *     Version:		1.20
  ******************************************************/
 
 #ifndef LQ070OUT_H_
@@ -27,6 +27,7 @@ typedef struct _LQ070outInstance {
 
 // external functions
 extern void lq070out_init(LQ070outInstance *inst, u32 baseAddr);
+extern void lq070out_deinit(LQ070outInstance *inst);
 extern void lq070out_setmode(LQ070outInstance *inst, int mode);
 
 extern void lq070out_write_reg(u32 adr, u32 offset, u32 value);

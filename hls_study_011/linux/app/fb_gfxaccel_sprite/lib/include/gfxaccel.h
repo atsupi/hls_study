@@ -2,9 +2,9 @@
  *    Filename:     gfxaccel.h 
  *     Purpose:     graphics accelerator driver
  *  Created on: 	2021/01/18
- * Modified on:
+ * Modified on:		2021/01/26
  *      Author: 	atsupi.com 
- *     Version:		0.80
+ *     Version:		0.90
  ******************************************************/
 
 #ifndef GFXACCEL_H_
@@ -79,6 +79,7 @@ typedef struct _GfxaccelInstance {
 
 // external functions
 extern u32 gfxaccel_init(GfxaccelInstance *inst, u32 baseAddr);
+extern void gfxaccel_deinit(GfxaccelInstance *inst);
 extern void gfxaccel_start(GfxaccelInstance *inst);
 extern void gfxaccel_stop(GfxaccelInstance *inst);
 extern u32 gfxaccel_isidle(GfxaccelInstance *inst);

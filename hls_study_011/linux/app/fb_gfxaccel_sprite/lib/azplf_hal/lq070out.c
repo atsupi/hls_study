@@ -2,9 +2,9 @@
  *    Filename:     lq070out.c
  *     Purpose:     LQ070 LCD display driver
  *  Created on: 	2021/01/20
- * Modified on:		2021/01/21
+ * Modified on:		2021/01/26
  *      Author: 	atsupi.com
- *     Version:		1.10
+ *     Version:		1.20
  ******************************************************/
 
 //#define DEBUG
@@ -17,11 +17,12 @@
 #include "azplf_bsp.h"
 #include "lq070out.h"
 
+static u32 page_size;
+
 void lq070out_init(LQ070outInstance *inst, u32 baseAddr)
 {
 	int fd;
 	u32 result;
-	u32 page_size;
 
 	inst->baseAddress = baseAddr;
 	page_size = sysconf(_SC_PAGESIZE);
@@ -42,6 +43,12 @@ void lq070out_init(LQ070outInstance *inst, u32 baseAddr)
 	}
 
 	inst->virtAddress = result;
+}
+
+void lq070out_deinit(LQ070outInstance *inst)
+{
+	if (inst->virtAddress)
+		munmap((void *)inst->virtAddress, page_size);
 }
 
 void lq070out_write_reg(u32 adr, u32 offset, u32 value)
