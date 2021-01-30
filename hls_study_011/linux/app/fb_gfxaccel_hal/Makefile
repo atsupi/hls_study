@@ -1,5 +1,5 @@
 PROGRAM = fb_gfxaccel_hal
-OBJS = fb_gfxaccel_hal.o sprite.o font.o
+OBJS = fb_gfxaccel_hal.o
 CC = arm-linux-gnueabihf-gcc
 CFLAGS = -g -I./lib/include
 LDFLAGS = -lpthread -L./lib -lazplf_hal -lazplf_util
@@ -25,5 +25,3 @@ clean :
 # header file dependency
 
 #iicps.o: iicps.h
-sprite.o: sprite.h
-font.o: font.h

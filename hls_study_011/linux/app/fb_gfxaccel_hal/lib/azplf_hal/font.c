@@ -35,7 +35,7 @@ void drawText(u32 dest_fb, u16 x, u16 y, u8 *str)
 
 	while (*str) {
 		ch = *str - 32;
-		if (ch > 94) ch = 14; //('.' - 32)
+		if (ch > 222) ch = 14; //('.' - 32)
 		src_x = (ch % 16) * FONT_WIDTH + l_fontBasePos.x;
 		src_y = (ch & 0xF0) + l_fontBasePos.y;
 		gfxaccel_bitblt(l_ptGfxaccel, 

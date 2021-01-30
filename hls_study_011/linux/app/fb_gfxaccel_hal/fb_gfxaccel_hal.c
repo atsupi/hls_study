@@ -16,12 +16,14 @@
 #include <stdint.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include "azplf_bsp.h"
 #include "azplf_hal.h"
 #include "azplf_util.h"
-#include "font.h"
-#include "sprite.h"
+
+// Game definitions
+#define INITIAL_SCENE				0			// initial game scene number
+
+extern int azplf_start_game_thread(int scene, fb_render_handler fb_renderer);
 
 /* 
  * Data address
@@ -42,15 +44,7 @@ static GfxaccelInstance gfxaccelInst;
 static int fbActive;
 static int fbBackgd;
 
-static u32 system_time = 0; // 1/60 sec unit
-struct timeval start_time;
-pthread_mutex_t mutex;
-
 static int quit = 0;
-
-static int scene = 0;
-static int scene_change = 0;	// flag to step to next_scene
-static int next_scene = 0;
 
 static Sprite Sprite1 = {
 	448, // x;
@@ -118,6 +112,34 @@ static u8 mapData[] = { // 15x15
 /******************* Function Prototypes ************************************/
 
 static int ReadSetup(VdmaInstance *inst);
+
+static u32 mapResourceFBtoMem(u32 baseAddr)
+{
+	int fd;
+	u32 result;
+
+	printf("In mapResourceFBtoMem()\n");
+	printf("File page size=0x%08x (%dKB)\n", frame_page, frame_page>>10);
+
+	fd = open("/dev/mem", O_RDWR | O_SYNC); // no cache used
+	result = (u32)mmap(NULL, frame_page, PROT_READ|PROT_WRITE, MAP_SHARED, fd, baseAddr);
+	printf("Mapping I/O: 0x%08x to vmem: 0x%08x\n", baseAddr, result);
+	close(fd);
+
+	if (result == 0 || result == 0xFFFFFFFF)
+	{
+		printf("Error: Mapping failure\n");
+		return 0;
+	}
+
+	return (result);
+}
+
+void unmapResourceVirAddress(u32 virtAddress)
+{
+	if (virtAddress)
+		munmap((void *)virtAddress, frame_page);
+}
 
 void drawTrianglePolygons(int fbNum)
 {
@@ -220,12 +242,12 @@ static void copyBitmapToFramebuffer(u32 *dst, u32 *src, int width, int height, i
 static void saveFBtoBitmapFile(u32 baseAddr)
 {
 	Bitmap bmp;
-	loadBitmapFile("base.bmp", &bmp);
+	loadBitmapFile("res/base.bmp", &bmp);
 	copyFramebufferToBitmap(bmp.data, 
 		(u32 *)vdma_get_frame_address(&vdmaInst_0, 0), 
 		DISP_WIDTH, DISP_HEIGHT, DISP_WIDTH);
 	saveBitmapFile(&bmp, "result.bmp");
-	free(bmp.data);
+	if (bmp.data) free(bmp.data);
 }
 
 static void loadBitmapFiletoFB(u32 baseAddr)
@@ -233,36 +255,12 @@ static void loadBitmapFiletoFB(u32 baseAddr)
 	Bitmap bmp;
 	printf("load bitmap file res/resource.bmp ...\n");
 	loadBitmapFile("./res/resource.bmp", &bmp);
-//	loadBitmapFile("resource.bmp", &bmp);
 	printf("done.\n");
 	printf("copy bitmap to resource frame buffer ...\n");
 	copyBitmapToFramebuffer((u32 *)baseAddr, bmp.data, 
 		DISP_WIDTH, DISP_HEIGHT, DISP_WIDTH);
 	printf("done.\n");
-	free(bmp.data);
-}
-
-static u32 mapResourceFBtoMem(u32 baseAddr)
-{
-	int fd;
-	u32 result;
-	u32 frame_page = 0x00200000; // 2MB page
-
-	printf("In mapResourceFBtoMem()\n");
-	printf("File page size=0x%08x (%dKB)\n", frame_page, frame_page>>10);
-
-	fd = open("/dev/mem", O_RDWR);
-	result = (u32)mmap(NULL, frame_page, PROT_READ|PROT_WRITE, MAP_SHARED, fd, baseAddr);
-	printf("Mapping I/O: 0x%08x to vmem: 0x%08x\n", baseAddr, result);
-	close(fd);
-
-	if (result == 0 || result == 0xFFFFFFFF)
-	{
-		printf("Error: Mapping failure\n");
-		return;
-	}
-
-	return (result);
+	if (bmp.data) free(bmp.data);
 }
 
 static int parse_argument(int argc, char *argv[])
@@ -289,44 +287,11 @@ static int parse_argument(int argc, char *argv[])
 	return (mode);
 }
 
-static int ProcessTime(void)
-{
-	static u32 old_time = 0;
-	struct timeval curr_time;
-	float duration; // us unit
-
-	pthread_mutex_lock(&mutex);
-	gettimeofday(&curr_time, NULL);
-//	printf("current time=%d:%d\n", (int)curr_time.tv_sec, (int)curr_time.tv_usec);
-	duration = (curr_time.tv_sec - start_time.tv_sec) * 1000000.0 + (curr_time.tv_usec - start_time.tv_usec);
-	duration -= system_time * 16000.0;
-
-	system_time += duration / 16000.0;
-	if (system_time == 0xffffffff) {
-		printf("system time is negative\n");
-		// system time is modified after booting
-		// reset start_time with current time
-		gettimeofday(&start_time, NULL);
-		system_time = 0;
-		old_time = 0;
-	}
-	pthread_mutex_unlock(&mutex);
-
-	if (system_time - old_time >= 59) {
-//		printf("%d\n", system_time / 60);
-		old_time = system_time;
-	}
-	if (duration < 60 * 1000 && duration >= 16) {
-		return (system_time);
-	}
-
-	return 0;
-}
-
 static void DrawDebugInfo(int fbNum)
 {
 	u8 info[16];
-	sprintf(info, "%04d:%06d", (int)(system_time / 60), (int)system_time);
+	u32 systime = game_get_systemtime();
+	sprintf(info, "%04d:%06d", (int)(systime / 60), (int)systime);
 	drawText(WriteFrameAddr[fbNum], 606, 448, info);
 }
 
@@ -379,22 +344,23 @@ static void DrawTestFrame(int fbNum)
 		480, 240, 481, 399, RGB8(255, 255, 255));
 }
 
-static void UpdateFrame(void)
+static void UpdateFrame(int scene)
 {
 	static int x = 0;
 	static int y = 0;
 	int i, j;
 	int status;
+	u32 systime;
 
 	// draw backfround frame as per scene number
-	if (scene == 0)
-	{
+	switch (scene) {
+	case 0:
 		DrawTestFrame(fbBackgd);
 		drawTrianglePolygons(fbBackgd);
-		drawText(WriteFrameAddr[fbBackgd], 240, 448, "2021 (c) ATSUPI.COM");
-	}
-	else
-	{
+		drawText(WriteFrameAddr[fbBackgd], 176, 448, "\x80\x80\x80 2021 (c) ATSUPI.COM \x80\x80\x80");
+		break;
+
+	case 1:
 		gfxaccel_bitblt(&gfxaccelInst, 
 			ResourceAddr, 0, 0, 800, 128, 
 			WriteFrameAddr[fbBackgd], 0, 0, GFXACCEL_BB_NONE);
@@ -407,15 +373,20 @@ static void UpdateFrame(void)
 		gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 
 			x * 32, y * 32, x * 32 + 63, y * 32 + 63, 
 			RGB8(255, 255, 255));
-	    if (++x == 24)
-	    {
+	    if (++x == 24) {
 	    	x = 0;
 	    	if (++y == 14) y = 0;
 	    }
-		drawSprite(&Sprite1, WriteFrameAddr[fbBackgd], system_time);
-		drawSprite(&Sprite2, WriteFrameAddr[fbBackgd], system_time);
+		systime = game_get_systemtime();
+		drawSprite(&Sprite1, WriteFrameAddr[fbBackgd], systime);
+		drawSprite(&Sprite2, WriteFrameAddr[fbBackgd], systime);
 		Sprite2.y += 2;
 		if (Sprite2.y > 448) Sprite2.y = 0;
+		break;
+	case 2:
+	    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 0, 0, 799, 479, 0x0);
+		drawText(WriteFrameAddr[fbBackgd], 240, 240, "APPLICATION CLOSED.");
+		break;
 	}
 
 	// switch display frame on double buffer
@@ -431,39 +402,6 @@ static void UpdateFrame(void)
 #endif
 }
 
-static int SceneChangeCheck(void)
-{
-	int update = 0;
-
-	pthread_mutex_lock(&mutex);
-	if (scene_change) {
-		scene = next_scene;
-		scene_change = 0;
-		update = 1;
-	}
-	pthread_mutex_unlock(&mutex);
-
-	if (update) printf("Scene changed to %d\n", scene);
-	return (update);
-}
-
-void *thread1(void *arg)
-{
-	gettimeofday(&start_time, NULL);
-
-	printf("Loop starts.\r\n");
-	while (1) {
-		if (ProcessTime()) {
-			SceneChangeCheck();
-			UpdateFrame();
-		}
-		if (quit) break;
-		usleep(5000); // 5ms wait
-	}
-
-	return 0;
-}
-
 int main(int argc, char *argv[])
 {
 	int i, j;
@@ -474,6 +412,7 @@ int main(int argc, char *argv[])
 	pthread_t pt;
 	char ch = ' ';
 	pos basePos;
+	u32 time;
 
 	mode = parse_argument(argc, argv);
 
@@ -518,11 +457,16 @@ int main(int argc, char *argv[])
 	status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbActive);
 	if (status != PST_SUCCESS) {
 		printf("Start Park failed\r\n");
+		vdma_deinit(&vdmaInst_0);
 		return PST_FAILURE;
 	}
 
 	// map Resource frambuffer address
 	mappedResAddr = mapResourceFBtoMem(ResourceAddr);
+	if (!mappedResAddr) {
+		vdma_deinit(&vdmaInst_0);
+		return PST_FAILURE;
+	}
 	printf("Test passed\r\n");
 
 	lq070out_init(&lq070Inst, LQ070OUT_BASE_ADDR);
@@ -531,6 +475,9 @@ int main(int argc, char *argv[])
 
     printf("Initialize gfxaccel instance\r\n");
 	if (gfxaccel_init(&gfxaccelInst, GFXACCEL_BASE_ADDR) == PST_FAILURE) {
+		lq070out_deinit(&lq070Inst);
+		unmapResourceVirAddress(mappedResAddr);
+		vdma_deinit(&vdmaInst_0);
 		return PST_FAILURE;
 	}
 
@@ -544,8 +491,6 @@ int main(int argc, char *argv[])
 
     printf("BitBlt Resource frame buffer to main frame buffer\r\n");
 	DrawTestFrame(fbActive);
-
-    // Invalidate frame buffer to reload updated data
 
     // Output results
 	ReadAddr = vdma_get_frame_address(&vdmaInst_0, 0);
@@ -568,48 +513,48 @@ int main(int argc, char *argv[])
 	loadBitmapFiletoFB(mappedResAddr);
 
 	printf("configure Sprite Resource\n");
+	// start position on resource frame buffer
 	basePos.x = 512;
 	basePos.y = 0;
 	configSpriteResouce(&gfxaccelInst, ResourceAddr, &basePos);
 
 	printf("configure Font Resource\n");
+	// start position on resource frame buffer
 	basePos.x = 256;
 	basePos.y = 0;
 	configFontResouce(&gfxaccelInst, ResourceAddr, &basePos);
 
-	sleep(1); // 1sec wait before starting graphics work thread
+	sleep(1); // 1sec wait before starting game work thread
 
-	// create mutex for thread handling
-	pthread_mutex_init(&mutex);
-	// create graphics worker thread
-	pthread_create(&pt, NULL, &thread1, NULL);
+	status = azplf_start_game_thread(INITIAL_SCENE, UpdateFrame);
+	if (status != PST_SUCCESS) {
+		printf("Error: Game worker thread cannot start.\n");
+		quit = 1;
+	}
 
-	while (1) {
+	while (!quit) {
 		do {
 			scanf("%c", &ch);
-		} while (ch == '\r');
+		} while (ch == '\r' || ch == '\n');
 
-		switch (scene) {
+		switch (game_get_scene()) {
 		case 0:
 			if (ch == 'x') {
+				game_set_next_scene(2);
+				usleep(50000);
+				azplf_terminate_game_thread();
 				quit = 1; // quit thread
 				sleep(1); // wait until thread terminates
 				break;
 			} else if (ch == ' ' || ch == 'n') {
-				pthread_mutex_lock(&mutex);
-				scene_change = 1;
-				next_scene   = 1;
-				pthread_mutex_unlock(&mutex);
+				game_set_next_scene(1);
 			} else {
 				printf("Command not found\r\n");
 			}
 			break;
 		case 1:
 			if (ch == 0x1b || ch == 'e') { // ESC
-				pthread_mutex_lock(&mutex);
-				scene_change = 1;
-				next_scene   = 0;
-				pthread_mutex_unlock(&mutex);
+				game_set_next_scene(0);
 			} else {
 				printf("Command not found\r\n");
 			}
@@ -618,26 +563,17 @@ int main(int argc, char *argv[])
 			break;
 		}
 		if (quit) break;
-		pthread_mutex_lock(&mutex);
-		printf("system time=%d\n", system_time);
-		pthread_mutex_unlock(&mutex);
+		time = game_get_systemtime();
+		printf("system time=%d\n", time);
 		sleep(1);
 	}
 	// draw ending screen
     printf("--- Exiting main() --- \r\n");
-    printf("Clear frame buffer\r\n");
-    gfxaccel_fill_rect(&gfxaccelInst, WriteFrameAddr[fbBackgd], 0, 0, 799, 479, 0x0);
-	drawText(WriteFrameAddr[fbBackgd], 240, 240, "APPLICATION CLOSED.");
-	status = vdma_start_parking(&vdmaInst_0, VDMA_READ, fbBackgd);
-	if (status != PST_SUCCESS) {
-		printf("Start Park failed\r\n");
-		return PST_FAILURE;
-	}
 
-	pthread_mutex_destroy(&mutex);
-	munmap((void *)mappedResAddr, frame_page);
+	azplf_game_deinit();
 	gfxaccel_deinit(&gfxaccelInst);
 	lq070out_deinit(&lq070Inst);
+	unmapResourceVirAddress(mappedResAddr);
 	vdma_deinit(&vdmaInst_0);
 
 	return 0;
